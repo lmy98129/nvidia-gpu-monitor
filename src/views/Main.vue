@@ -1,7 +1,7 @@
 <template>
   <div id="app" class="flex min-h-screen">
     <Sidebar />
-    <div class="flex flex-col bg-brown-background flex-1 text-white ml-56">
+    <div class="flex flex-col bg-brown-background flex-1 text-white ml-56 border-t">
       <div 
         v-if="connectStatus == 'EMPTY'"
         class="min-h-full w-full flex flex-col justify-center"
@@ -26,15 +26,27 @@
       <div 
         v-else 
         v-for="(item, idx) in gpuList(connectStatus)" :key="idx"
-        class="flex mb-3"
+        class="flex pt-4 pb-3 border-b items-center"
       >
-          <div class="iconfont iconxianka text-5xl"></div>
-          <div class="right-wrapper flex-col">
-            <div class="upper-wrap">
-              {{ item.product_name }} 风扇转速: {{ item.fan_speed }} | 温度: {{ temper(item.temperature.gpu_temp) }}
-            </div>
-            <div class="lower-wrap">
-              {{ item.fb_memory_usage.free }} | {{ item.fb_memory_usage.used }} | {{ item.fb_memory_usage.total }}
+          <div class="iconfont iconxianka text-5xl mx-8"></div>
+          <div class="right-wrapper flex flex-1 items-center justify-between">
+            <div class="name text-xl">{{ item.product_name }}</div>
+            <div class="other-info flex-col mr-6">
+              <div class="upper-wrap flex justify-end">
+                <div class="fan-speed flex">
+                  <div class="iconfont iconfan text-lg"></div>
+                  <div class="content text-lg">{{ item.fan_speed }}</div>
+                </div>
+                <div class="temperature flex ml-4">
+                  <div class="iconfont iconwendu text-lg"></div>
+                  <div class="content text-lg">{{ temper(item.temperature.gpu_temp) }}</div>
+                </div>
+              </div>
+              <div class="lower-wrap flex mt-2">
+                <div class="mem-free text-center text-3xl px-4 text-green-400">{{ memUsage(item.fb_memory_usage.free) }}</div>
+                <div class="mem-used text-center text-3xl px-4 text-orange-400">{{ memUsage(item.fb_memory_usage.used) }}</div>
+                <div class="mem-total text-center text-3xl px-4 pr-0 text-blue-500">{{ memUsage(item.fb_memory_usage.total) }}</div>
+              </div>
             </div>
           </div>
       </div>
@@ -86,6 +98,11 @@ export default {
         return tempStr.replace("C", "℃");
       }
     },
+    memUsage() {
+      return function(memStr) {
+        return memStr.replace("MiB", "");
+      }
+    }
   },
 
   mounted() {

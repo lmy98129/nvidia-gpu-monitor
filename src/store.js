@@ -57,9 +57,9 @@ export default new Vuex.Store({
 
     changeStatus(state, { id, status }) {
       let idx = state.task.findIndex((item) => item.id == id);
-      if (idx >= 0) {
+      // if (idx >= 0) {
         state.task.splice(idx, 1, { ...state.task[idx], status });
-      }
+      // }
     }
 
   },

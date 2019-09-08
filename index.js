@@ -18,7 +18,7 @@ let processList = [];
 if (process.env.NODE_ENV === 'DEV') {
   baseUrl = 'http://localhost:8080';
 } else {
-  baseUrl = `file://${process.cwd()}/dist/index.html`
+  baseUrl = `file://${__dirname}/dist/index.html`;
 }
 
 mainUrl = baseUrl;
@@ -49,7 +49,7 @@ function createMainWindow() {
   });
   // mainWindow.setOpacity(0.98);
   mainWindow.loadURL(mainUrl);//在窗口内要展示的内容index.html 就是打包生成的index.html
-  // mainWindow.webContents.openDevTools();
+  mainWindow.webContents.openDevTools();
 
   mainWindow.on('close', (event) => {
     if (mainWindow) {
@@ -63,7 +63,9 @@ function createMainWindow() {
     mainWindow = null;
     if (processList.length > 0) {
       for(let item of processList) {
-        item.handler.send({ action: "STOP", id: item.id });
+        if (item.handler.connected) {
+          item.handler.send({ action: "STOP", id: item.id });
+        }
       }
       processList = [];
     }
@@ -180,12 +182,20 @@ ipcMain.on('show-right-click-menu', (event, { id, status }) => {
 
 ipcMain.on('start-ssh-task', (event, config) => {
   let { id } = config;
-  let child = fork('./workers/Connection.js', [ JSON.stringify(config) ]);
+  let workerUrl;
+
+  if (process.env.NODE_ENV === 'DEV') {
+    workerUrl = './workers/Connection.js';
+  } else {
+    workerUrl = `${__dirname}/workers/Connection.js`;
+  }
+
+  let child = fork(workerUrl, [ JSON.stringify(config) ]);
+  
   processList.push({ id, handler: child });
 
   child.on('message', (msg) => {
     if (msg.action && msg.action == "ERROR") {
-
       if (mainWindow !== null) {
         mainWindow.webContents.send('edit-task-list', { action: "STATUS", id, status: "STOPED" });
       }
@@ -201,8 +211,10 @@ ipcMain.on('stop-ssh-task', (event, config) => {
   let idx = processList.findIndex((item) => item.id == id); 
   if (idx >= 0) {
     try {
-      processList[idx].handler.send({ action: "STOP", id });
-      processList.splice(idx, 1);      
+      if (processList[idx].handler.connected) {
+        processList[idx].handler.send({ action: "STOP", id });
+      }
+      processList.splice(idx, 1);
     } catch (error) {
       throw error;
     }

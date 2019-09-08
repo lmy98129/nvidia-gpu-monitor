@@ -81,8 +81,7 @@ export default {
 
   methods: {
     showCreateWindow() {
-      this.$store.commit('setCreateWindowAction', { action: 'ADD' });
-      ipcRenderer.send('show-create-window');
+      ipcRenderer.send('show-create-window', { action: "ADD" });
     },
     showRightClickMenu(e) {
       let { id } = e.target.dataset;
@@ -97,6 +96,7 @@ export default {
     },
     deleteItem(e) {
       let { id } = e.target.dataset;
+      ipcRenderer.send('stop-ssh-task', { id: this.$store.state.currentUUID });
       this.$store.commit('deleteItem', { id });
       e.stopPropagation();
     },

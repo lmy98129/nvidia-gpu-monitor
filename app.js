@@ -49,12 +49,29 @@ function createMainWindow() {
   });
   // mainWindow.setOpacity(0.98);
   mainWindow.loadURL(mainUrl);//在窗口内要展示的内容index.html 就是打包生成的index.html
-  mainWindow.webContents.openDevTools();
+  // mainWindow.webContents.openDevTools();
+
+  mainWindow.on('close', (event) => {
+    if (mainWindow) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
 
   mainWindow.on('closed', () => {
-    //回收BrowserWindow对象
+    // 回收BrowserWindow对象
     mainWindow = null;
-  });
+    if (processList.length > 0) {
+      for(let item of processList) {
+        item.handler.send({ action: "STOP", id: item.id });
+      }
+      processList = [];
+    }
+  })
+
+  mainWindow.on('show', () => {
+    mainWindow.show();
+  })
   
   mainWindow.on('enter-full-screen', () => {
     // 提示渲染进程进入全屏模式
@@ -69,7 +86,7 @@ function createMainWindow() {
 }
 
 // 创建“新建项目窗口”
-function createCreateWindow() {
+function createCreateWindow({ action }) {
   Menu.setApplicationMenu(null);
   createWindow = new BrowserWindow({
     width: 500,
@@ -87,20 +104,23 @@ function createCreateWindow() {
   });
 
   createWindow.once('ready-to-show', () => {
-    createWindow.show();
+    createWindow.webContents.send('set-create-window-action', { action } );
+    setTimeout(() => {
+      createWindow.show();
+    }, 500);
   });
 
   createWindow.loadURL(createUrl);
-  createWindow.webContents.openDevTools();
+  // createWindow.webContents.openDevTools();
 
   createWindow.on('closed', () => {
     createWindow = null;
   })
 }
 
-function beforeCreateCreateWindow () {
+function beforeCreateCreateWindow({ action }) {
   if (createWindow == null) {
-    createCreateWindow();
+    createCreateWindow({ action });
   }
 }
 
@@ -115,13 +135,23 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (mainWindow == null) {
     createMainWindow();
+  } else {
+    mainWindow.show();
   }
 });
+app.on('before-quit', () => {
+  if (mainWindow) {
+    mainWindow.close();
+    mainWindow = null;
+  }
+})
 
 
 // 进程通信
 // 显示创建窗口
-ipcMain.on('show-create-window', beforeCreateCreateWindow);
+ipcMain.on('show-create-window', (event, { action }) => {
+  beforeCreateCreateWindow({ action });
+});
 // 关闭创建窗口
 ipcMain.on('close-create-window', (event, arg) => {
   if (arg.action !== "CANCEL") {
@@ -130,8 +160,7 @@ ipcMain.on('close-create-window', (event, arg) => {
   createWindow.close();
 })
 
-ipcMain.on('show-right-click-menu', (event, data) => {
-  let { id, status } = data;
+ipcMain.on('show-right-click-menu', (event, { id, status }) => {
   const menu = new Menu();
   menu.append(new MenuItem({ label: '开启连接', enabled: status !== "STARTED" }));
   menu.append(new MenuItem({ label: '关闭连接', enabled: status !== "STOPED" }));
@@ -141,8 +170,7 @@ ipcMain.on('show-right-click-menu', (event, data) => {
 
   menu.append(new MenuItem({ type: "separator" }));
   menu.append(new MenuItem({ label: '配置…', click: () => {
-    mainWindow.webContents.send('before-show-create-window', { action: "EDIT" } );
-    beforeCreateCreateWindow();
+    beforeCreateCreateWindow({ action: "EDIT" });
   }}));
 
   const activatedWindow = BrowserWindow.fromWebContents(event.sender);
@@ -150,14 +178,34 @@ ipcMain.on('show-right-click-menu', (event, data) => {
   menu.popup(activatedWindow);
 })
 
-ipcMain.on('asynchronous-message', (event, arg) => {
-  let name = `ssh${processList.length + 1}`;
-  processList.push({ name })
+ipcMain.on('start-ssh-task', (event, config) => {
+  let { id } = config;
+  let child = fork('./workers/Connection.js', [ JSON.stringify(config) ]);
+  processList.push({ id, handler: child });
 
-  let child = fork('./workers/Connection.js', [name]);
   child.on('message', (msg) => {
-    console.log(`msg from child: ${JSON.stringify(msg)}`);
+    if (msg.action && msg.action == "ERROR") {
+
+      if (mainWindow !== null) {
+        mainWindow.webContents.send('edit-task-list', { action: "STATUS", id, status: "STOPED" });
+      }
+    } else if (mainWindow !== null) {
+      mainWindow.webContents.send('remote-ssh-results', msg);
+    }
   })
 
-  event.sender.send('asynchronous-reply', 'pong');
+})
+
+ipcMain.on('stop-ssh-task', (event, config) => {
+  let { id } = config;
+  let idx = processList.findIndex((item) => item.id == id); 
+  if (idx >= 0) {
+    try {
+      processList[idx].handler.send({ action: "STOP", id });
+      processList.splice(idx, 1);      
+    } catch (error) {
+      throw error;
+    }
+  }
+
 })

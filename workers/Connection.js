@@ -1,57 +1,70 @@
-var Client = require('ssh2').Client;
-var config = require('../configs/test');
-var parser = require('fast-xml-parser');
-
-function connect() {
-  var conn = new Client();
-  const tag = "nvidia_smi_log"
-  var isStartRecording = false
-  var buffer = ""
-
-  conn.on('ready', function () {
-    console.log('Client :: ready');
-    conn.shell(function (err, stream) {
-      if (err) throw err;
-      stream.on('close', function () {
-        console.log('Stream :: close');
-        conn.end();
-      }).on('data', function (data) {
-        data = data.toString();
-        if (data.indexOf(`<${tag}>`) >= 0) {          
-          isStartRecording = true;
-        }
-
-        if (isStartRecording) buffer += data;
-        
-        if (data.indexOf(`</${tag}>`) >= 0) {
-          isStartRecording = false;
-          var tObj = parser.getTraversalObj(buffer);
-          var json = parser.convertToJson(tObj);
-          for (let gpu of json.nvidia_smi_log.gpu) {
-            if (typeof gpu.processes !== "string") {
-              console.log(gpu)
-              console.log(gpu.processes);
-            }
-          }
-        }
-
-      });
-  
-      stream.write('nvidia-smi -q -x\n');
-      stream.end("exit\n");
-    });
-  
-  }).connect(config);
-}
+const Client = require('ssh2').Client;
+const parser = require('fast-xml-parser');
 
 const argv = process.argv;
-const name = argv[2];
+const { id, ...config } = JSON.parse(argv[2])
 
-let t = setInterval(() => {
-  process.send({ msg: `I am ${name}` });
-}, 2000);
+const conn = new Client();
+const tag = "nvidia_smi_log"
 
-setTimeout(() => {
-  clearInterval(t);
+let isStartRecording = false
+let buffer = ""
+let currentStream;
+
+function stopHandler() {
+  if (currentStream) currentStream.end("exit");
   process.exit();
-}, 6100);
+}
+
+function errorHandler(err) {
+  if (err) {
+    process.send({ action: "ERROR" });
+    stopHandler();
+  }
+}
+
+conn.on('ready', function () {
+  conn.shell(function (err, stream) {
+    currentStream = stream;
+    errorHandler(err);
+    
+    stream.on('close', function () {
+      conn.end();
+    }).on('data', function (data) {
+
+      data = data.toString();
+      if (data.indexOf(`<${tag}>`) >= 0) {          
+        isStartRecording = true;
+      }
+
+      if (isStartRecording) buffer += data;
+      
+      if (data.indexOf(`</${tag}>`) >= 0) {
+        isStartRecording = false;
+        let tObj = parser.getTraversalObj(buffer);
+        let json = parser.convertToJson(tObj);
+        process.send({ id, data: json });
+        buffer = "";
+      }
+
+    });
+
+    stream.write('nvidia-smi -q -x -l 2\n');
+
+  });
+
+}).on('error', (err) => {
+  errorHandler(err);
+  
+}).connect(config);
+
+process.on('message', (msg) => {
+  let { action } = msg;
+  if (msg.id != id) return;
+
+  switch(action) {
+    case "STOP": 
+      stopHandler();
+      break;
+  }
+});

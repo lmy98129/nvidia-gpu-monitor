@@ -1,18 +1,12 @@
 import Vue from 'vue';
 import Vuex from 'vuex';
-import { createPersistedState, createSharedMutations } from 'vuex-electron';
 
 Vue.use(Vuex)
 
 export default new Vuex.Store({
-  plugins: [
-    createPersistedState(),
-    createSharedMutations(),
-  ],
   state: {
     task: [],
     currentUUID: "",
-    createWindowAction: "ADD",
   },
   mutations: {
     init(state, { task }) {
@@ -31,7 +25,9 @@ export default new Vuex.Store({
 
     edit(state, currentItem) {
       let idx = state.task.findIndex((item) => item.id == currentItem.id);
-      state.task[idx] = currentItem;
+      if (idx >= 0) {
+        state.task[idx] = currentItem;
+      }
     },
 
     selectItem(state, { id }) {
@@ -52,9 +48,18 @@ export default new Vuex.Store({
       }
     },
 
-    setCreateWindowAction(state, { action }) {
-      state.createWindowAction = action;
-      console.log(state);
+    updateSshResult(state, { id, data }) {
+      let idx = state.task.findIndex((item) => item.id == id);
+      if (idx >= 0) {
+        state.task.splice(idx, 1, { ...state.task[idx], data });
+      }
+    },
+
+    changeStatus(state, { id, status }) {
+      let idx = state.task.findIndex((item) => item.id == id);
+      if (idx >= 0) {
+        state.task.splice(idx, 1, { ...state.task[idx], status });
+      }
     }
 
   },

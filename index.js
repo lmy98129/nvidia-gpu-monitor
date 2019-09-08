@@ -49,7 +49,7 @@ function createMainWindow() {
   });
   // mainWindow.setOpacity(0.98);
   mainWindow.loadURL(mainUrl);//在窗口内要展示的内容index.html 就是打包生成的index.html
-  mainWindow.webContents.openDevTools();
+  // mainWindow.webContents.openDevTools();
 
   mainWindow.on('close', (event) => {
     if (mainWindow) {

@@ -27,7 +27,7 @@
     "eslint": "^5.16.0",
     "eslint-plugin-vue": "^5.0.0",
     "vue-template-compiler": "^2.6.10",
-    "electron": "^6.0.7"
+    "electron": "^7.2.4"
   },
   "build": {
     "directories": {
